@@ -1,0 +1,304 @@
+---
+title: "Final project"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Project Title-Camera Price prediction and analysis
+
+```{r}
+#Loading the data into R#
+df<-read.csv("C:/Users/cr210126/Downloads/camera_dataset.csv",stringsAsFactors =FALSE)
+
+df$Expensive=ifelse(df$Price < 1000, "Yes","No")
+df<-data.frame(df)
+
+
+#Using gsub to replaces dot with spaces in column header as R automatically replaces spaces with dot while importing
+names(df) <- gsub(x = names(df),
+                        pattern = "\\.",
+                        replacement = " ")
+
+#Getting familiarised with the dataset using str() and summary() function
+str(df)
+summary(df)
+View(df)
+#Lets' find out the number of models each brand owns out of 1039 observations
+table(df$Brand)
+
+#Checking for null values 
+is.null(df) #There are no null values as seen
+
+#checking for missing values
+
+colSums(is.na(df)) == 0 #There are total of 4 columns that contain missing values as seen
+
+#Lets check the missing data pattern for the dataset using mice
+library(mice)
+md.pattern(df)
+
+#We can also visualize the missing data using VIM package as follows:
+library(VIM)
+mice_plot <- aggr(df, col=c('navyblue','yellow'),
+                    numbers=TRUE, sortVars=TRUE,
+                    labels=names(df), cex.axis=.7,
+                    gap=3, ylab=c("Missing data","Pattern"))
+
+df1=df[-1]
+```
+
+#Lets explore the data using some visualizations
+```{r}
+ggplot(df,aes(`Release date`,Price))+
+  geom_point()+
+  geom_text(aes(label = Model), nudge_x = 1,
+nudge_y = 1, check_overlap = TRUE)+
+  theme_wsj()+
+  labs(caption="Donyoe",title="Price by release Date")
+
+
+library(corrplot)
+corrplot(cor(df[-c(1,14)],use = "complete.obs"),type = "full")
+
+#using package dataexplorer to perform basic EDA
+library(DataExplorer)
+plot_str(df)
+plot_missing(df)
+create_report(df) #Create its own html file for data profiling
+```
+The dataset consists of 1039 observations and 13 features in total. Out of 13 features ,one is the price variable to be predicted and others are the predictor variables.
+
+```{r}
+#Let's create a different data frame to find out correlations between numerical variables and also this will help us in determing K-NN .
+cor_subset<-df[ -c(1, 2,14) ] 
+View(cor_subset)
+cor(cor_subset, use="complete.obs", method="kendall") 
+boxplot(cor_subset)
+```
+Building K-NN model
+```{r}
+#Let's see the model distribution percentage wise
+round(prop.table(table(df$Expensive)) * 100, digits = 1)
+```
+```{r}
+
+#Lets try to fiond outleirs in the dataset
+detectOutlier <- function(cor_subset,cutoff = 3) {
+    ## Calculate the sd
+    sds <- apply(cor_subset, 2, sd, na.rm = TRUE)
+    ## Identify the cells with value greater than cutoff * sd (column wise)
+    result <- mapply(function(d, s) {
+        which(d > cutoff * s)
+    }, cor_subset, sds)
+    result
+}
+
+outliers_knn <- detectOutlier(cor_subset)
+outliers_knn
+```
+
+#Now we can remove the outliers using another function as follows:
+```{r}
+removeOutlier <- function(cor_subset, outliers_knn) {
+    result <- mapply(function(d, o) {
+        res <- d
+        res[o] <- NA
+        return(res)
+    }, cor_subset, outliers_knn)
+    return(as.data.frame(result))
+}
+
+knn.new <- removeOutlier(cor_subset, outliers_knn)
+View(knn.new)
+
+
+
+
+```
+Lets use mean to impute missing values
+```{r}
+
+#Using k-nn imputation to impute missing data columns.There are four columns which have missing values:They are Macro focus Range,storage Included, Weight Inc batteries and dimension
+library(imputeTS)
+
+knn_imputed<-na.mean(knn.new, option = "mean")   # Mean Imputation
+View(knn_imputed)
+anyNA(knn_imputed)
+
+
+
+```
+
+
+Normalizing numeric data for K-NN with function after removing NA values in some columns
+```{r}
+normalize <- function(x) {
+return ((x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - min(x, na.rm = TRUE)))}
+
+df_n <- as.data.frame(lapply(knn_imputed,normalize))
+names(df_n) <- gsub(x = names(df_n),
+                        pattern = "\\.",
+                        replacement = " ")
+View(df_n)
+
+Expensive<-df$Expensive
+df_final<-cbind(df_n,Expensive)
+View(df_final)
+```
+Splitting the dataset into test and training using caret package as random sampling occurs in it
+```{r}
+ind <- sample(2, nrow(df_final), replace=TRUE, prob=c(0.7, 0.3))
+trainData <- df_final[ind==1,]
+testData <- df_final[ind==2,]
+#removing factorvariable from training and test datasets
+trainData1 <- trainData[-12]
+testData1 <- testData[-12]
+#checking the dimensions of train and test datasets
+dim(trainData)
+dim(trainData1)
+dim(testData)
+dim(testData1)
+
+#Now we will store target variable brand for testing and training data
+df_train_labels <- trainData$Expensive
+dim(df_train_labels)
+class(df_train_labels)
+
+df_test_labels<-testData$Expensive
+dim(df_test_labels)
+```
+Building k-nn model on training data
+```{r}
+
+
+library(class)
+library(caret)
+
+trControl <- trainControl(method  = "cv",
+                          number  = 10)
+fit <- train(Expensive ~ .,
+             method     = "knn",
+             tuneGrid   = expand.grid(k = 1:35),
+             trControl  = trControl,
+             metric     = "Accuracy",
+             data       = df_final)
+fit
+                          
+
+prc_test_pred <- knn(train = trainData1, test =testData1,cl = df_train_labels, k=3)
+
+library(gmodels)
+CrossTable(x=df_test_labels,y=prc_test_pred,prop.chisq=FALSE)
+
+#Creating the confusion matrix to check accuracy
+confusionMatrix(prc_test_pred,df_test_labels)
+
+#The accuracy of the model is 99.36% which is pretty good and accurate
+
+mean(prc_test_pred == df_test_labels)
+
+```
+
+Building Linear Regression model
+
+```{r}
+linearMod <- lm(Price ~ df_n$`Max resolution`+df_n$`Low resolution`+df_n$`Effective pixels`+df_n$`Zoom wide  W `+df_n$`Zoom tele  T `+df_n$`Normal focus range`+df_n$`Macro focus range`+df_n$`Storage included`+df_n$`Weight  inc  batteries `+df_n$Dimensions, data=df)  # build linear regression model on full data
+print(linearMod)
+summary(linearMod)
+AIC(linearMod)
+plot(linearMod)
+
+#Upadting the model
+model2 = update(linearMod, ~.-df$`Normal focus range`-df$`Macro focus range`-df$`Storage included`) 
+summary(model2)
+plot(model2)
+```
+
+#Using Naive-Bayes classifier to classify whether the camera is expensive or not based on predictors
+
+```{r}
+#Lets look at the data before proceeding
+
+library(e1071)
+library(caret)
+library(caTools)
+
+#Lets convert our response variable to factor to perform naive bayes
+df_final$Expensive=factor(df_final$Expensive)
+str(df_final)
+
+table(df_final$Expensive)
+
+#Now we already have test and tarining data ready 
+dim(trainData)
+dim(testData)
+
+#Training the model on training dataset
+ expense_classifier=naiveBayes(trainData,df_train_labels)
+
+#Evaluating model performance
+expense_predictor=predict(expense_classifier,testData)
+expense_predictor
+
+library(gmodels)
+CrossTable(expense_predictor,df_test_labels,prop.chisq = FALSE, prop.t = FALSE, 
+           prop.r = FALSE, dnn = c('predicted', 'actual'))
+
+#improving the model
+expense_classifier2=naiveBayes(trainData,df_train_labels,laplace = 1)
+expense_predictor_2=predict(expense_classifier2,testData)
+expense_predictor_2
+
+CrossTable(expense_predictor_2,df_test_labels,prop.chisq = FALSE, prop.t = FALSE, 
+           prop.r = FALSE, dnn = c('predicted', 'actual'))
+
+confusionMatrix(expense_predictor_2,df_test_labels)
+
+#The accuracy of model using naive bayes is 96.14% which is pretty good but still lower than k-nnclassification.
+```
+
+Using SVM classification model
+```{r}
+
+library(e1071)
+
+#dividing test and training dataset as 75% training dataset and 25% test dataset
+
+train_camera <- df_final[1:780,]
+test_camera<- df_final[781:1039,]
+
+set.seed(123)
+library(caret)
+
+trctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+set.seed(3233)
+ 
+svm_Linear <- train(Expensive ~., data =train_camera, method = "svmLinear",
+                 trControl=trctrl,
+                 preProcess = c("center", "scale"),
+                 tuneLength = 10)
+svm_Linear
+
+pred <- predict(svm_Linear,test_camera)
+pred
+
+confusionMatrix(pred,test_camera$Expensive)
+```
+
+#Predicting values for 
+predicted_svm <- predict(model_svm_linear, test_camera[,1:13])
+predicted_svm
+```
+Using random forest for categorical classification as it works well with categorical features against continous target variable
+
+```{r}
+library(randomForest)
+set.seed(100)
+
+names(df_n) <- make.names(names(df_n))
+
+rf <-randomForest(Price~.,data=df_n, ntree=500) 
+print(rf)
+```

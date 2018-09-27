@@ -1,0 +1,381 @@
+---
+title: "Practicum1"
+author: "Nishit"
+date: "February 7, 2018"
+output:
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+ Q-1 -Download the dataset as follows based on url given
+ 
+```{r}
+
+# Q-1 -Download the dataset as follows based on url given#
+
+dataurl <- "https://archive.ics.uci.edu/ml/machine-learning-databases/glass/glass.data"
+download.file(url = dataurl, destfile = "glass.data")
+glass_df <- read.csv("glass.data", header = FALSE)
+```
+
+Q-2 Exploring the dataset to get familiar with
+```{r}
+str(glass_df)
+summary(glass_df)
+
+#Adding column names to the glass dataframe#
+
+colnames(glass_df) <- c("Id","RI","Na","Mg","Al","Si","K","Ca","Ma","Fe","Type of glass")
+glass_df<-data.frame(glass_df)
+View(glass_df)
+
+
+attach(glass_df)
+```
+
+Q-3 creating a simple histogram of the Na column and overlaying a curve.
+
+
+The data is pretty much normally distributed and K-NN is a non-parametric method.Nonparametric methods don't have fixed numbers of parameters or estimates of parameters in the model. The reason why kNN is non-parametric is the model parameters actually grows with the training set - you can image each training instance as a "parameter" in the model, because they're the things you use during prediction.  The instance values should be normalized to avoid biasing on range of data.
+
+```{r}
+
+hist(Na)
+# Add a Normal Curve
+
+h<-hist(Na, breaks=10, col="red", xlab="Unit Measurement of Sodium in percent",
+  	main="Histogram of Na with Normal Curve") 
+xfit<-seq(min(Na),max(Na),length=40) 
+yfit<-dnorm(xfit,mean=mean(Na),sd=sd(Na)) 
+yfit <- yfit*diff(h$mids[1:2])*length(Na) 
+lines(xfit, yfit, col="black",lwd=2)
+
+#K-NN Algorith requires normalized data as it gives accurate results when the data is scaled#
+```
+Q-4-5 Normalization using min-max normalization and z-score normalization
+
+Normalizing columns 1 and 2 using min-max normalization after removing ID column in step as below in the chunk.
+
+
+```{r}
+glass_df_minmax = subset(glass_df, select = -c(Id) )
+
+#Normalize function#
+normalize <- function(x) {
+    return ((x - min(x)) / (max(x) - min(x)))
+  
+}
+
+znormalize<-function(x)
+{
+  return((x-mean(x))/sd(x))
+}
+
+
+glass_df_n<-cbind(apply(glass_df_minmax[1:2],2,normalize),apply(glass_df_minmax[3:9],2,znormalize),glass_df_minmax[10])
+
+head(glass_df_n)
+```
+
+Q-6 Dividing data randomly in validation and training dataset using caret function
+ 
+```{r}
+library(caret)
+set.seed(3456)
+trainIndex <- createDataPartition(glass_df_n$Type.of.glass, p = 0.5, 
+                                  list = FALSE, 
+                                  times = 1)
+
+glass_validation <- glass_df_n[- trainIndex,]
+glass_training <- glass_df_n[trainIndex,]
+
+nrow(glass_training)
+nrow(glass_validation)
+
+#randomziing the sample to create a unbiased dataset#
+
+glass_validation_final<-glass_validation[sample(nrow(glass_validation)),]
+glass_training_final<-glass_training[sample(nrow(glass_training)),]
+head(glass_training_final)
+head(glass_validation_final)
+  
+```
+Q-7 Implement the k-NN algorithm in R (do not use an implementation of k-NN from a package) and use your algorithm with a k=10 to predict the glass type for the following two cases:. Use the whole normalized data set for this; not just the training data set. Note that you need to normalize the values of the new cases the same way as you normalized the original data.
+RI = 1.51621 | 12.53 | 3.48 | 1.39 | 73.39 | 0.60 | 8.55 | 0.00 | Fe = 0.05
+RI = 1.5098 | 12.77 | 1.85 | 1.81 | 72.69 | 0.59 | 10.01 | 0.00 | Fe = 0.01
+
+```{r}
+
+#randomizing the data for k-nn#
+set.seed(2783)
+knn_train<-glass_df_n[sample(nrow(glass_df_n)),]
+
+
+#Combining both the cases with knn_train #
+knn_combined<-rbind(knn_train,c(1.51621,12.53,3.48,1.39,73.39,0.60,8.55,0.00,0.05,0),c(1.5098,12.77,1.85,1.81,72.69,0.59,10.01,0.00,0.01,0))
+
+
+# Normalizing the combined dataset with all cases#
+knn_combined_n<-cbind(apply(knn_combined[1:2],2,normalize),apply(knn_combined[3:9],2,znormalize),knn_combined[10])
+
+# Removing new cases from the training data
+all_cases<-knn_combined_n[nrow(knn_combined_n):(nrow(knn_combined_n)-1),1:9]
+
+# Final Training data for k-nn implementation 
+knn_combined_n<-knn_combined_n[-(nrow(knn_combined_n):(nrow(knn_combined_n)-1)),]
+
+
+#knn_implementation starts
+
+##function for distance
+
+distance<-function(x,y)
+{
+  d<-0
+  for(i in 1:length(x))
+  {
+    d<-d+(x[i]-y[i])^2
+  }
+  distance<-sqrt(d)
+}
+
+##function for neighbors
+
+neighbors<-function(train,new_case)
+{
+  m<-nrow(train)
+  ds<-numeric(m)
+  y<-new_case[1,c(1,2,3,4,5,6,7,8,9)]
+    for(i in 1:m)
+  { 
+    x<-train[i,c(1,2,3,4,5,6,7,8,9)]
+    
+    ds[i]<-distance(x,y)
+  }
+  neighbors<-ds
+}
+
+
+## function for K closest neighbors
+
+k.closest<-function(neighbors,k)
+{
+  ordered.neighbors<-order(neighbors)
+  k.closest<-ordered.neighbors[1:k]
+}
+
+
+##function for finding maximum votes(mode)
+
+Mode<- function(x)
+{
+  ux<-unique(x)
+  ux[which.max(tabulate(match(x,ux)))]
+}
+
+
+#Full knn function
+
+knn_function<-function(train,u,k)
+{
+  nb<-neighbors(train,u)
+  f<-k.closest(nb,k)
+  knn_function<-Mode(knn_combined_n$Type.of.glass[f])
+}
+
+# Prediction for test case 1
+nn1<-knn_function(knn_combined_n,all_cases[1,],10)
+nn1 
+
+#prediction is type 2 for case1#
+
+# Prediction for test case 2
+nn2<-knn_function(knn_combined_n,all_cases[2,],10)
+nn2
+
+# prediction is type 5 for case2#
+
+
+```
+
+Q-8 k-nn using class package
+```{r}
+
+library(class)
+prediction_class<- knn(train=knn_combined_n[,1:9],test=all_cases,cl=knn_combined_n[,10],k=14)
+prediction_class
+
+#The prediction gives type 2 and type 5 using class package also#
+```
+
+Q-9 Acuuracy of k-nn package
+```{r}
+prediction2<- knn(train = glass_training_final[,1:9], test = glass_validation_final[,1:9],cl=glass_training_final[,10],k=14)
+
+confusionMatrix(prediction2,glass_validation_final[,10])
+
+# the accuracy for matrix is 63.21%#
+```
+Q-10 
+```{r}
+
+knn1<-function(train,u,k)
+{
+  nb<-neighbors(train,u)
+  f<-k.closest(nb,k)
+  knn_function<-Mode(glass_training_final$Type.of.glass[f])
+}
+
+c1=c()
+c2=c()
+accuracy=c()
+for(k in 5:14)
+{
+for(i in 1:nrow(glass_validation_final))
+{
+c1[i]<-knn1(glass_training_final,glass_validation_final[i,1:9],k)
+}
+  cm<-confusionMatrix(c1,glass_validation_final[,10])
+  c2[k-4]<-cm$overall['Accuracy']
+}
+
+#Accuracy of all k's 
+c2
+
+#Best k with maximum accuracy
+K_accurate=which.max(c2)+4
+K_accurate
+
+#the most optimized value of k is k=11#
+```
+
+
+
+Q-11Create a plot of k (x-axis) versus error rate (percentage of incorrect classifications) using ggplot.
+```{r}
+k=c(5:14)
+k
+plot(k,c2,type='l',lwd=10)
+
+
+library(ggplot2)
+ggplot(NULL,aes(k,c2)) + geom_line()
+```
+Q-12 Produce a cross-table confusion matrix showing the accuracy of the classification using a package of your choice and a k of your choice.
+
+```{r}
+library(gmodels)
+model_prediction <- knn(train = glass_training_final[,1:9], test = glass_validation_final[,1:9],cl=glass_training_final[,10],k=11)
+model_prediction
+CrossTable(x=glass_validation_final[,10],y=model_prediction,prop.chisq=FALSE)
+```
+Q-13 
+Comment on the run-time complexity of the k-NN for classifying w new cases using a training data set of n cases having m features. Assume that m is "large". How does this algorithm behave as w, n, and m increase? Would this algorithm be "fast" if the training data set and the number of features are large?
+
+Answer-I think the algorith would be slower as the cases increases because to calculate k-nn each time distance has to be calculated for the test case with the training datatset which will take more time to execute.
+```{r}
+#Problem-2#
+
+setwd("D:/Data mining with R/Practicum1/housesalesprediction")
+house_data<-read.csv("kc_house_data.csv",header=TRUE)
+house_data<-data.frame(house_data)
+
+#No of cases#
+n<-nrow(house_data)
+n
+str(house_data)
+# The dataset has 21 variables and 21613 observations#
+
+#removing the columns id and date as they wont be used for predicting price of the new house#
+house_data = subset(house_data, select = -c(id,date) )
+View(house_data)
+
+#Now, I will select my own features of the house and it is 1st row of dataset and make a test data so that we can compare test and training data and make accurate knn predictions and will bind them with original data to do z-score normalization#
+
+test_data<-c(3,1,1180,5650,1,0,0,3,7,1180,0,1955,0,98178,47.5112,-122.257,1340,5650)
+training_data<-rbind(house_data[,2:19],test_data)
+
+normalize <- function(x) {
+  return((x-mean(x))/sd(x))
+}
+
+#normalizing the columns of training dataset except column price using z-score normalization as its more accurate#
+training_data[1:18] <- lapply(training_data[1:18],normalize)
+
+#adding price column to the training dataset to prepare a final training dataset for knn prediction using caret package#
+final_trainingdata <- cbind.data.frame(house_data[,1], training_data[1:(nrow(training_data)-1),])
+colnames(final_trainingdata)[1] <- 'price'
+View(final_trainingdata)
+
+
+
+#Using caret package to do knn regression on column 'price'#
+
+library(caret)
+trctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+knn_fit <- train(price ~., data = final_trainingdata, method = "knn",trControl=trctrl)
+knn_fit
+
+#predicting the value of house based on selected features in test case#
+t_predict <- predict(knn_fit, newdata = training_data[nrow(training_data),])
+t_predict
+
+#The predicted value is 205171.4 for the test case which was the first row of given dataset#
+
+# To evaluate the model, I would create partition for test and training dataset and find the mean squared error to determine the accuracy of the model.If the error is low, then the model is accuarte#
+
+```
+
+```{r}
+
+#problem-3#
+
+setwd("D:/Data mining with R/Practicum1")
+occupancy_rate<-read.csv("occupancyratestimeseries.csv")
+df<-data.frame(occupancy_rate)
+
+#using scatter plot to see the distribution of the data#
+plot(df$Period,df$OccupancyRate,xlab="Period",ylab ="Occupancy rate")
+
+#We can see that there is no linear relationship between the two variables#
+
+attach(df) # attach the data frame #
+
+#We will use the exponential forecasting method for the prediction#
+
+df$f1 <- 0
+df$e1 <- 0
+df$f1[1] <- df[1,2]
+a <- 0.3
+for (i in 2:nrow(df)) {
+  df$f1[i] <- df$f1[i-1] + a*df$e1[i-1]
+  df$e1[i] <- df[i,2] - df$f1[i]
+}
+n <- nrow(df)
+F.es <- df[n,3] + a*df$e1[n] 
+F.es
+
+#The forecast for the next period is 33.47969#
+
+
+lower_bound <- F.es - (1.96*sd(OccupancyRate))
+upper_bound <- F.es + (1.96*sd(OccupancyRate))
+lower_bound # The lower bound is 18.81271#
+upper_bound #The upper bound is 47.69146#
+
+#So there is 95% probability that our forecast is between 18.04 and 46.91#
+
+
+mean(abs(df$e1)) 
+
+# The man absolute error is 6.290716 which is less and so the model is not much biased and therefore froecast is fairly good#
+```
+
+
+
+
+
+
+

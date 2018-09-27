@@ -1,0 +1,487 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Problem-1
+```{r}
+adult<-read.csv("D:/Data mining with R/Assignmmet files/adult.csv",header=TRUE,stringsAsFactors = TRUE)
+
+#Look at the structure of the data#
+str(adult)
+summary(adult)
+
+#looking at the correlation betwee all numeric variables#
+cor(adult[sapply(adult, function(x) !is.factor(x))])
+
+#checking for null values#
+is.null(adult)
+
+#Checking the skewness of the variables#ss
+
+# Problme 1.2#
+hist(adult$age)
+hist(adult$fnlwgt)
+hist(adult$education.num)
+hist(adult$capital.gain)
+hist(adult$capital.loss)
+hist(adult$hours.per.week)
+
+library(e1071)
+skewness(adult$age)
+skewness(adult$fnlwgt)
+skewness(adult$education.num)
+skewness(adult$capital.gain)
+skewness(adult$capital.loss)
+skewness(adult$hours.per.week)
+
+#All the columns above are positively skewed to the right except education.num as it is negative and so is skewed to the left
+
+#Problem 1.3-the frequency of each categorical feature in dataset is as follows:-
+
+library(plyr)
+y1=count(adult,'workclass')
+y2=count(adult,'education')
+y3=count(adult,'occupation')
+y4=count(adult,'marital.status')
+y5=count(adult,'relationship')
+y6=count(adult,'race')
+y7=count(adult,'sex')
+y8=count(adult,'native.country')
+y1
+y2
+y3
+y4
+y5
+y6
+y7
+y8
+```
+The likelihood of categorical variables can be found as follows:
+```{r}
+workclass<-y1[2]/sum(y1[2])
+education<-y2[2]/sum(y2[2])
+occupation<-y3[2]/sum(y3[2])
+marital.status<-y4[2]/sum(y4[2])
+relationship<-y5[2]/sum(y5[2])
+race<-y6[2]/sum(y6[2])
+sex<-y7[2]/sum(y7[2])
+native.country<-y8[2]/sum(y8[2])
+
+#we have 24720 records having salary<50k and 7841 having salary>50k,so finding likelihood for income
+
+p1<-24720/32561 # e P(<=50K)
+p2<-7841/32561 # ie P(>50K)
+p1
+p2
+```
+
+Problem 1.4
+#Naive Bayes classification
+```{r}
+#The parameters taken in the below naive bayes function are the ones taken in likelihood function.
+
+nb<-function(workclass,c1,education,c2,occupation,c3,marital.status,c4,relationship,c5,race,c6,sex,c7,native.country,c8)
+
+{
+  if(missing(workclass)) #missing value of workclass3
+  {
+    w<-0
+    w1<-0
+  }
+  else
+  {
+    w<-workclass[1,c1]  #likelihood of the record with a workclass to have income <=50k 
+    w1<-workclass[2,c1] #likelihood of the record with a workclass to have income >50k 
+  }
+  if(missing(education))
+  {
+    e<-0
+    e1<-0
+  }
+  else
+  {
+    e<-education[1,c2]
+    e1<-education[2,c2]
+  }
+  if(missing(occupation))
+  {
+    o<-0
+    o1<-0
+  }
+  else
+  {
+   o<-occupation[1,c3]
+   o1<-occupation[2,c3]
+  }
+  if(missing(marital.status))
+  {
+    m<-0
+    m1<-0
+  }
+  else
+  {
+    m<-marital.status[1,c4]
+    m1<-marital.status[2,c4]
+  }
+  if(missing(relationship))
+  {
+    r<-0
+    r1<-0
+  }
+  else
+  {
+  r<-relationship[1,c5]
+  r1<-relationship[2,c5]
+  }
+  if(missing(race))
+  {
+    ra<-0
+    ra1<-0
+  }
+  else
+    {
+      ra<-race[1,c6]
+      ra1<-race[2,c6]
+    }
+  if(missing(sex))
+  {
+    s<-0
+    s1<-0
+  }
+  else
+  {
+  s<-sex[1,c7]
+  s1<-sex[2,c7]
+  }
+  if(missing(native.country))
+  {
+    n<-0
+    n1<-0
+  }
+  else
+  {
+  n<-native.country[1,c8]
+  n1<-native.country[2,c8]
+  }
+  combined1<-c(w,e,o,m,r,ra,s,n) #combined1 is all record with income<=50k
+  combined2<-c(w1,e1,o1,m1,r1,ra1,s1,n1) #combined2 is all records with income>50k
+  
+  z1<-combined1[combined1!=0] 
+  z1
+  
+  z2<-combined2[combined2!=0] 
+  z2
+  
+  product<-prod(z1) #Multiplying the likelihoods of individual features 
+  product
+  
+  product1<-prod(z2)
+  
+  p0<-(product*p1) #Multiplying the likelihoods of individual features for income <=50K with P(0)
+  p1<-(product1*p2) #Multiplying the likelihoods of individual features for income >50K with P(1)
+  
+  finalprob<-p0/(p0+p1) #final probability from conditional probability for the given feature to have income <=50K
+  finalprob
+}  
+```
+#Classify for the example given with following features:
+
+White Male Adult, Federal Government Employee, Bachelor's Degree, From Ireland. 
+
+The function will choose only these features dynamically to give the probability of the record to have income <=50K
+
+Let's check for our function:
+```{r}
+#white male adult, federal government worker, bachelor degree, ireland
+nb(workclass,' Federal-gov',education,' Bachelors',race,' White',sex,' Male',
+           native.country,' Ireland')
+```
+Problme 2-
+
+```{r}
+
+# problme 2.1 Are there outliers in the data set? If so, what is the appropriate action and how are they discovered?
+#loading data from excel file#
+
+library(readxl)
+
+UFFI<-read_excel("D:/Data mining with R/Assignmmet files/uffidata.xlsx",sheet = "Sales Data")
+#getting familizarizsed with the dataset#
+UFFI <- na.omit(UFFI)
+str(UFFI)
+summary(UFFI)
+
+## by plotting taking into consideration of of boxplot of each variable, we can see whether the outliers are present or not
+boxplot(UFFI$`Sale Price`,horizontal = T)
+boxplot(UFFI$`Lot Area`,horizontal = T)
+boxplot(UFFI$`Year Sold`,horizontal = T)
+boxplot(UFFI$`Brick Ext`,horizontal = T)
+boxplot(UFFI$`Bsmnt Fin_SF`,horizontal = T)
+boxplot(UFFI$`Enc Pk Spaces`,horizontal = T)
+boxplot(UFFI$`Living Area_SF`,horizontal = T)
+
+#as Seen from the boxplot, sales price,lot area and living area_sf have outliers,so we have to remove them and we will now remove them by using a function#
+
+detectoutliers <- function(x) {
+  ## Calculate the sd
+  sd_deviation<- apply(x, 2, sd, na.rm = TRUE)
+  ## Identify the values which are greater than 3 std deviation#
+  
+  result <- mapply(function(o, s) {
+    which(o > 3 * s)
+  }, x, sd_deviation)
+  result
+}
+
+outliers <- detectoutliers(UFFI[c(3,8,10)])
+outliers
+
+## The appropiate action to handle the outliers is to remove the outliers i.e. to replace with NA
+removeoutliers <- UFFI
+removeoutliers[outliers$Sale.Price,3] <- NA
+removeoutliers[outliers$Lot.Area,8] <- NA
+removeoutliers[outliers$Living.Area_SF,10] <- NA
+
+
+
+```
+#problem 2.2 Using visual analysis of the sales price with a histogram, is the data normally distributed and thus amenable to parametric statistical analysis? What are the correlations to the response variable and are there collinearities?
+```{r}
+
+#Using the histogran to see the linear distribution#
+hist(UFFI$`Sale Price`, 
+     main="Histogram for Sale price", 
+     xlab="Sale Price", 
+     border="blue", 
+     col="green",
+     xlim=c(76900,179000),
+     las=1, 
+     breaks=10)
+
+#Histogram using ggplot#
+library(ggplot2)
+qplot(UFFI$`Sale Price`, geom="histogram") 
+
+#Finding correlation and collinearities#
+cor(UFFI$`Sale Price`,UFFI)
+
+# As seen from the correlation numbers, living area and yesr sold have significant impact on sale price followed closely by pk spaces and lot area also#
+
+library(ppcor)
+pcor(UFFI, method = "pearson")
+#As seen from the chart below, there is no linear relations and collineraitty to our response variable sale price
+```
+
+
+#problem 2.3 Is the presence or absence of UFFI alone enough to predict the value of a residential property?
+
+```{r}
+#We will see whether UFFI IN is alone enough to predict the value of Sale Price using linear regression model#
+
+model <- lm(UFFI$`Sale Price`~UFFI$`UFFI IN`, data = UFFI)
+summary(model)
+
+#The value of p for UFF IN is 0.192 ,so it is not significant enough to predict value of sale price alone.
+```
+
+#Problem 2.4 Is UFFI a significant predictor variable of selling price when taken with the full set of variables available?
+
+```{r}
+model1 <- lm(UFFI$`Sale Price`~UFFI$`UFFI IN`+UFFI$`Brick Ext`+UFFI$`45 Yrs+`+UFFI$`Bsmnt Fin_SF`+UFFI$`Lot Area`+UFFI$`Enc Pk Spaces`+UFFI$`Living Area_SF`+UFFI$`Central Air`+UFFI$Pool, data = UFFI)
+summary(model1)
+
+#The value of UFFI IN is 0.03542 which is <0.05 ,so it is significant when taken along with other variables.
+```
+#Problem 2.5 What is the ideal multiple regression model for predicting home prices in this data set? Provide a detailed analysis of the model, including Adjusted R-Squared, RMSE, and p-values of principal components. Use backfitting to build the model.
+
+```{r}
+model2 <- step(lm(UFFI$`Sale Price` ~. , data=UFFI), type='backward')
+summary(model2)
+
+#The value of Adjusted R-squared is 0.748 and the p-value of princiapl components are shown in the summary above
+
+#Now we will calculate RMSE 
+RMSE <- function(residuals) {
+  sqrt(mean(residuals^2))
+}
+
+RMSE(model2$residuals)
+
+#The RMSE is 19522.8
+```
+#Problem 2.6  On average, how do we expect UFFI will change the value of a property?
+
+
+Regression equation is:
+
+Sale Price = -9.994e+06 + 4.992e+03*Year.Sold +8.532e+03*Brick Ext+ 1.947*Lot.Area + 1.004e+04*Enc Pk Spaces + 5.220e+01*Living Area_SF + 6.680e+04*pool
+
+On average, 1 unit of UFFI will decrease the price of property by $7018
+
+#Part7 If the home in question is older than 45 years old, doesn't have a finished basement, has a lot area of 5000 square feet, has a brick exterior, 2 enclosed parking spaces, 1700 square feet of living space, central air, and no pool, what is its predicted value and what are the 95% confidence intervals of this home with UFFI and without UFFI?
+
+```{r}
+#As year 2011 most times, we will take 2011 for our newdata
+
+
+#Part1- Not considering column UFFI IN.i.e taking value of UFFI IN=0
+
+no_UFFI <- data.frame(2011,0,1,1,0.000,5000,2,1700,1,0)
+colnames(no_UFFI) <- c('Year Sold','UFFI IN', 'Brick Ext', '45 Yrs+', 'Bsmnt Fin_SF', 'Lot Area','Enc Pk Spaces', 'Living Area_SF', 'Central Air','Pool')
+
+#Predicing the new model without UFFI
+
+predict_noUFFI <- predict(model2,no_UFFI)
+predict_noUFFI
+
+#The predicted value for sale price without UFFI is 100866.6 for variables selected above
+
+```
+
+Calculating 95 % confidence intervals.
+```{r}
+low_bound <- predict_noUFFI - 1.96*20250
+high_bound <- predict_noUFFI + 1.96*20250
+low_bound
+high_bound
+```
+
+#WithUFFI
+
+```{r}
+with_UFFI <- data.frame(2011,1,1,1,0.000,5000,2,1700,1,0)
+colnames(with_UFFI) <- c('Year Sold','UFFI IN', 'Brick Ext', '45 Yrs+', 'Bsmnt Fin_SF', 'Lot Area','Enc Pk Spaces', 'Living Area_SF', 'Central Air','Pool')
+
+predict_UFFI<-predict(model2,with_UFFI)
+predict_UFFI
+
+#Calculating 95% confidence intervals.z=1.96 for 95% cI
+
+lower_bound <- predict_UFFI - 1.96*202050
+upper_bound <- predict_UFFI + 1.96*20250
+lower_bound
+upper_bound
+```
+
+#Part8The amount that client overpayed is 215000-predicted value which is 174185.7
+Client overpayed: 215000 - 174185.7 = $40814.3
+
+Hence, the amount is quite justifiable.
+
+
+#Problem-4 Elaborate on the use of kNN and Naive Bayes for data imputation. Explain in reasonable detail how you would use these algorithms to impute missing data and why it can work.
+
+Use of KNN for Data Imputation:
+
+We propose the use of k-nearest neighbour algorithm to estimate and substitute missing data.k-nearest neighbour can predict both discrete attributes (the most frequent value among the k nearest neighbours) and continuous attributes (the mean among the k nearest neighbours).There is no necessity for creating a predictive model for each attribute with missing data. Actually, the k-nearest neighbour does not create explicit models (like a decision tree or a set of rules), once the data set is used as a "lazy" model. Thus,the k-nearest neighbour can be easily adapted to work with any attribute as class, by just modifying which attributes will be considered in the distance metric. Also,
+this approach can easily treat examples with multiple missing values.
+
+Eaxmple: Suppose you have a variable fruit type along with features like protein,carbs and vitamins content.Let's say you got a new dataset having values for protein,carbs and vitamins and you need to determine what type of fruit it might be depending upon values given.We can use K-NN prediction as it will look for the closed neighbour and calculate the eucledian distnace and give you the type of fruit acc.to values.
+
+Use ofnaive Bayes for data imputation:
+
+Most imputation methods does not take into account the between-attribute relationships, which are usually explored in classification problems. Thats why we use Naive Bayes.
+
+
+Example: For example, a fruit may be considered to be an apple if it is red, round, and about 10 cm in diameter. A naive Bayes classifier considers each of these features to contribute independently to the probability that this fruit is an apple, regardless of any possible correlations between the color, roundness, and diameter features.
+
+NB classifier is based on Bayesian theorem and is used when dimensionality of input is high which is basically based on probability of occurrence. 
+
+Suppose, there is an animal belonging to either body type thin or thick and the type is dependent on various features like height,weight,speed,etc.Now,as the group of animals is divided in 2 groups of thick and thin the prob of being thick is 2/3 and being thin is 1/3.So the prob of one type is more than other.
+
+If we are given any missing value of a categorical variable,then we can predict using naive bayes that the animal will belong to which body type depending on probability.
+
+  
+
+
+
+#Problem-3 
+
+```{r}
+
+# Problem 3.1
+
+#Loading the dataset and explpring it#
+
+titanic<-read.csv("D:/Data mining with R/Assignmmet files/titanic_data.csv")
+View(titanic)
+str(titanic)
+summary(titanic)
+
+#Dividing the dataset into test and training#
+
+library(caret)
+library(lattice)
+set.seed(300)
+trainIndex <- createDataPartition(titanic$Survived, p = .80, 
+                                  list = FALSE, 
+                                  times = 1)
+titanic_train <- titanic[ trainIndex,]
+titanic_test  <- titanic[-trainIndex,]
+
+#seeing the number of rows for test and training dataset#
+nrow(titanic_train)
+nrow(titanic_test)
+```
+
+```{r}
+#problem-2
+
+#Constrcuting the model to test the significance after removing columns ticket and names as they are not useful#
+model <- glm(Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare + Embarked+ PassengerId, data=titanic_train, family=binomial)
+summary(model)
+```
+
+
+#The p-value is 0.98 for embarked which is very high,so neglecting that using stepwise backward elimination#
+```{r}
+model1 <- glm(Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare + PassengerId, data=titanic_train, family=binomial)
+summary(model1)
+```
+The value of parch is very high,so building model again after removing parch
+
+```{r}
+model2 <- glm(Survived ~ Pclass + Sex + Age + SibSp + Fare + PassengerId, data=titanic_train, family=binomial)
+summary(model2)
+```
+
+The value of fare is very high,so building model again after removing fare
+
+```{r}
+model3 <- glm(Survived ~ Pclass + Sex + Age + SibSp + PassengerId, data=titanic_train, family=binomial)
+summary(model3)
+```
+
+The value of passengerId is high,so building model again after removing PassengerId
+
+```{r}
+model4 <- glm(Survived ~ Pclass + Sex + Age + SibSp, data=titanic_train, family=binomial)
+summary(model4)
+```
+  
+#Problem 3.3
+
+Logistic Regression equation:
+
+result = 1/(1+exp^(-(5.76 + (-1.40*Pclass+ (-2.59*Sex) + (-0.04*Age) + (-0.349*SibSp)))
+
+
+```{r}
+#problem 3.4
+
+outcome <- predict(model4, titanic_test, type='response')
+outcome <- round(outcome)
+
+#The outcome is 83.8% which is pretty good#
+library(caret)
+confusionMatrix(outcome,titanic_test$Survived)
+```
+
+
+
+
